@@ -26,7 +26,7 @@ import {
   ListItemText,
   InputLabel,
   FormControl,
-  Theme // Importando Theme do MUI
+  Theme
 } from '@mui/material';
 import { 
   Add as AddIcon,
@@ -45,8 +45,8 @@ interface Appointment {
   id: string;
   client_id: string;
   start_time: string;
-  end_time: string; // Adicionado para refletir a estrutura da tabela
-  appointment_services: { service_id: string; price: number }[];
+  end_time: string;
+  appointment_services: { service_id: string }[];
   created_by: string;
 }
 
@@ -59,8 +59,7 @@ interface Client {
 interface Service {
   id: string;
   name: string;
-  price: number;
-  duration: number;
+  duration: number; // Removido price
 }
 
 export default function Appointments() {
@@ -70,17 +69,16 @@ export default function Appointments() {
   const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
-  const [openClientDialog, setOpenClientDialog] = useState(false); // Novo estado para modal de cliente
-  const [openServiceDialog, setOpenServiceDialog] = useState(false); // Novo estado para modal de serviço
+  const [openClientDialog, setOpenClientDialog] = useState(false);
+  const [openServiceDialog, setOpenServiceDialog] = useState(false);
   const [currentAppointment, setCurrentAppointment] = useState<Appointment | null>(null);
   const [clientId, setClientId] = useState('');
   const [appointmentServices, setAppointmentServices] = useState<string[]>([]);
   const [appointmentDate, setAppointmentDate] = useState<Date | null>(new Date());
-  const [newClientName, setNewClientName] = useState(''); // Estado para novo cliente
-  const [newClientPhone, setNewClientPhone] = useState(''); // Estado para telefone do novo cliente
-  const [newServiceName, setNewServiceName] = useState(''); // Estado para novo serviço
-  const [newServicePrice, setNewServicePrice] = useState(''); // Estado para preço do novo serviço
-  const [newServiceDuration, setNewServiceDuration] = useState('60'); // Estado para duração do novo serviço
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServiceDuration, setNewServiceDuration] = useState('60');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { user } = useAuth();
@@ -95,7 +93,7 @@ export default function Appointments() {
       const [appointmentsData, clientsData, servicesData] = await Promise.all([
         supabase
           .from('appointments')
-          .select('*, appointment_services(service_id, price, services(name, price))')
+          .select('*, appointment_services(service_id, services(name))')
           .order('start_time', { ascending: true }),
         supabase.from('clients').select('*'),
         supabase.from('services').select('*')
@@ -160,7 +158,6 @@ export default function Appointments() {
     setNewClientName('');
     setNewClientPhone('');
     setNewServiceName('');
-    setNewServicePrice('');
     setNewServiceDuration('60');
   };
 
@@ -173,7 +170,6 @@ export default function Appointments() {
   const handleCloseServiceDialog = () => {
     setOpenServiceDialog(false);
     setNewServiceName('');
-    setNewServicePrice('');
     setNewServiceDuration('60');
   };
 
@@ -193,10 +189,9 @@ export default function Appointments() {
       }, 0);
 
       const startDate = new Date(appointmentDate);
-      const endDate = new Date(startDate.getTime() + totalDurationMinutes * 60000); // Converter minutos para milissegundos
+      const endDate = new Date(startDate.getTime() + totalDurationMinutes * 60000);
 
       if (currentAppointment) {
-        // Atualizar agendamento existente
         const { error, data } = await supabase
           .from('appointments')
           .update({ 
@@ -205,13 +200,12 @@ export default function Appointments() {
             end_time: endDate.toISOString() 
           })
           .eq('id', currentAppointment.id)
-          .select('id') // Para obter o ID do agendamento atualizado
+          .select('id')
           .single();
 
         if (error) throw error;
         appointmentId = data.id;
       } else {
-        // Criar novo agendamento
         const { error, data } = await supabase
           .from('appointments')
           .insert([{ 
@@ -220,24 +214,21 @@ export default function Appointments() {
             end_time: endDate.toISOString(),
             created_by: user?.id 
           }])
-          .select('id') // Para obter o ID do novo agendamento
+          .select('id')
           .single();
 
         if (error) throw error;
         appointmentId = data.id;
       }
 
-      // Remover serviços antigos associados ao agendamento (se necessário)
       await supabase
         .from('appointment_services')
         .delete()
         .eq('appointment_id', appointmentId);
 
-      // Inserir novos serviços associados ao agendamento
       const servicesToInsert = appointmentServices.map(serviceId => ({
         appointment_id: appointmentId,
         service_id: serviceId,
-        price: services.find(s => s.id === serviceId)?.price || 0 // Pegar o preço do serviço, se disponível
       }));
 
       const { error: servicesError } = await supabase
@@ -274,7 +265,7 @@ export default function Appointments() {
       if (error) throw error;
 
       setClients([...clients, data]);
-      setClientId(data.id); // Define o novo cliente como selecionado no modal de agendamento
+      setClientId(data.id);
       handleCloseClientDialog();
     } catch (error) {
       setError('Erro ao adicionar novo cliente');
@@ -283,13 +274,8 @@ export default function Appointments() {
   };
 
   const handleSaveNewService = async () => {
-    if (!newServiceName || !newServicePrice || !newServiceDuration) {
+    if (!newServiceName || !newServiceDuration) {
       setError('Todos os campos são obrigatórios');
-      return;
-    }
-
-    if (isNaN(Number(newServicePrice)) || Number(newServicePrice) < 0) {
-      setError('Preço inválido');
       return;
     }
 
@@ -303,17 +289,16 @@ export default function Appointments() {
         .from('services')
         .insert([{ 
           name: newServiceName, 
-          price: Number(newServicePrice), 
           duration: Number(newServiceDuration), 
           created_by: user?.id 
         }])
-        .select('id, name, price, duration')
+        .select('id, name, duration')
         .single();
 
       if (error) throw error;
 
       setServices([...services, data]);
-      setAppointmentServices([...appointmentServices, data.id]); // Adiciona o novo serviço ao agendamento atual
+      setAppointmentServices([...appointmentServices, data.id]);
       handleCloseServiceDialog();
     } catch (error) {
       setError('Erro ao adicionar novo serviço');
@@ -377,7 +362,7 @@ export default function Appointments() {
                 backgroundColor: '#f5f5f5',
               },
               '&.Mui-focused': {
-                boxShadow: '0px 0px 0px 2px rgba(0, 0, 0, 0.1)', // Sombra mais sutil para consistência com a imagem
+                boxShadow: '0px 0px 0px 2px rgba(0, 0, 0, 0.1)',
               },
             },
             '& .MuiInputBase-input': {
@@ -442,9 +427,9 @@ export default function Appointments() {
               onChange={(e) => setClientId(e.target.value as string)}
               label="Cliente"
               sx={(theme: Theme) => ({
-                borderRadius: 16, // Bordas mais arredondadas como na imagem
+                borderRadius: 16,
                 '& .MuiOutlinedInput-root': {
-                  border: `2px solid ${theme.palette.primary.main}`, // Cor rosa pastel
+                  border: `2px solid ${theme.palette.primary.main}`,
                   '&:hover': {
                     borderColor: theme.palette.primary.dark,
                   },
@@ -470,7 +455,7 @@ export default function Appointments() {
                 selected.map(id => services.find(service => service.id === id)?.name).join(', ')
               }
               label="Serviços"
-              sx={{ borderRadius: 16 }} // Bordas mais arredondadas
+              sx={{ borderRadius: 16 }}
             >
               {services.map(service => (
                 <MenuItem key={service.id} value={service.id}>
@@ -490,7 +475,7 @@ export default function Appointments() {
                   fullWidth: true,
                   sx: { 
                     mt: 2, 
-                    borderRadius: 16, // Bordas mais arredondadas
+                    borderRadius: 16,
                     '& .MuiOutlinedInput-root': {
                       borderRadius: 16,
                     },
@@ -509,7 +494,7 @@ export default function Appointments() {
               onClick={handleAddNewClient} 
               variant="contained" 
               sx={{ 
-                backgroundColor: '#c8e6c9', // Verde pastel (suave, diferente de rosa)
+                backgroundColor: '#c8e6c9',
                 '&:hover': { backgroundColor: '#a5d6a7' },
                 borderRadius: 16,
               }}
@@ -520,7 +505,7 @@ export default function Appointments() {
               onClick={handleAddNewService} 
               variant="contained" 
               sx={{ 
-                backgroundColor: '#b3e5fc', // Azul pastel (suave, diferente de rosa e verde)
+                backgroundColor: '#b3e5fc',
                 '&:hover': { backgroundColor: '#90caf9' },
                 borderRadius: 16,
               }}
@@ -602,19 +587,6 @@ export default function Appointments() {
             value={newServiceName}
             onChange={(e) => setNewServiceName(e.target.value)}
             required
-            sx={{ mb: 2, borderRadius: 16 }}
-          />
-          <TextField
-            margin="dense"
-            label="Preço"
-            type="number"
-            fullWidth
-            variant="outlined"
-            value={newServicePrice}
-            onChange={(e) => setNewServicePrice(e.target.value)}
-            InputProps={{
-              startAdornment: <InputAdornment position="start">R$</InputAdornment>,
-            }}
             sx={{ mb: 2, borderRadius: 16 }}
           />
           <TextField

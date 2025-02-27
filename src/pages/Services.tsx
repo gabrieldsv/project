@@ -9,84 +9,86 @@ import {
   TableCell, 
   TableContainer, 
   TableHead, 
-  TableRow,
-  TextField,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  InputAdornment,
-  CircularProgress,
-  Snackbar,
-  Alert,
-  InputLabel,
-  FormControl,
-  OutlinedInput
+  TableRow, 
+  TextField, 
+  Dialog, 
+  DialogActions, 
+  DialogContent, 
+  DialogTitle, 
+  IconButton, 
+  InputAdornment, 
+  CircularProgress, 
+  Snackbar, 
+  Alert 
 } from '@mui/material';
-import { 
-  Add as AddIcon,
-  Search as SearchIcon,
-  Edit as EditIcon,
-  AccessTime as TimeIcon,
-  AttachMoney as MoneyIcon
-} from '@mui/icons-material';
+import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon } from '@mui/icons-material';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 
+// Interface para serviços
 interface Service {
   id: string;
   name: string;
-  price: number;
   duration: number;
-  created_at: string;
+  created_by: string;
 }
 
 export default function Services() {
   const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [filteredServices, setFilteredServices] = useState<Service[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
-  const [editingService, setEditingService] = useState<Service | null>(null);
-  const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
-  const [duration, setDuration] = useState('60');
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const [currentService, setCurrentService] = useState<Service | null>(null);
+  const [serviceName, setServiceName] = useState('');
+  const [serviceDuration, setServiceDuration] = useState('60');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const { user } = useAuth();
 
   useEffect(() => {
-    fetchServices();
+    fetchData();
   }, []);
 
-  const fetchServices = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('services')
         .select('*')
-        .order('name', { ascending: true });
-      
+        .eq('created_by', user?.id);
+
       if (error) throw error;
+
       setServices(data || []);
+      setFilteredServices(data || []);
     } catch (error) {
-      console.error('Erro ao buscar serviços:', error);
-      showSnackbar('Erro ao carregar serviços', 'error');
+      setError('Erro ao carregar dados');
+      console.error(error);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleFilter = () => {
+    const filtered = services.filter(service =>
+      service.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredServices(filtered);
+  };
+
+  useEffect(() => {
+    handleFilter();
+  }, [searchTerm, services]);
+
   const handleOpenDialog = (service?: Service) => {
     if (service) {
-      setEditingService(service);
-      setName(service.name);
-      setPrice(service.price.toString());
-      setDuration(service.duration.toString());
+      setCurrentService(service);
+      setServiceName(service.name);
+      setServiceDuration(service.duration.toString());
     } else {
-      setEditingService(null);
-      setName('');
-      setPrice('');
-      setDuration('60');
+      setCurrentService(null);
+      setServiceName('');
+      setServiceDuration('60');
     }
     setOpenDialog(true);
   };
@@ -96,94 +98,58 @@ export default function Services() {
   };
 
   const handleSaveService = async () => {
-    if (!name) {
-      showSnackbar('Nome é obrigatório', 'error');
+    if (!serviceName || !serviceDuration) {
+      setError('Todos os campos são obrigatórios');
       return;
     }
 
-    if (!price || isNaN(Number(price)) || Number(price) < 0) {
-      showSnackbar('Preço inválido', 'error');
-      return;
-    }
-
-    if (!duration || isNaN(Number(duration)) || Number(duration) <= 0) {
-      showSnackbar('Duração inválida', 'error');
+    if (isNaN(Number(serviceDuration)) || Number(serviceDuration) <= 0) {
+      setError('Duração inválida');
       return;
     }
 
     try {
-      const priceValue = Number(price);
-      const durationValue = Number(duration);
-
-      if (editingService) {
-        // Atualizar serviço existente
+      if (currentService) {
         const { error } = await supabase
           .from('services')
-          .update({ name, price: priceValue, duration: durationValue })
-          .eq('id', editingService.id);
-        
+          .update({ 
+            name: serviceName, 
+            duration: Number(serviceDuration),
+          })
+          .eq('id', currentService.id);
+
         if (error) throw error;
-        showSnackbar('Serviço atualizado com sucesso', 'success');
       } else {
-        // Criar novo serviço
         const { error } = await supabase
           .from('services')
           .insert([{ 
-            name, 
-            price: priceValue, 
-            duration: durationValue,
+            name: serviceName, 
+            duration: Number(serviceDuration), 
             created_by: user?.id 
           }]);
-        
+
         if (error) throw error;
-        showSnackbar('Serviço criado com sucesso', 'success');
       }
-      
+
       handleCloseDialog();
-      fetchServices();
+      fetchData();
     } catch (error) {
-      console.error('Erro ao salvar serviço:', error);
-      showSnackbar('Erro ao salvar serviço', 'error');
+      setError('Erro ao salvar serviço');
+      console.error(error);
     }
   };
 
-  const showSnackbar = (message: string, severity: 'success' | 'error') => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
-
-  const filteredServices = services.filter(service => 
-    service.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const formatCurrency = (value: number) => {
-    return value.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    });
-  };
-
-  const formatDuration = (minutes: number) => {
-    if (minutes < 60) {
-      return `${minutes} min`;
-    } else {
-      const hours = Math.floor(minutes / 60);
-      const remainingMinutes = minutes % 60;
-      if (remainingMinutes === 0) {
-        return hours === 1 ? `1 hora` : `${hours} horas`;
-      } else {
-        return hours === 1 
-          ? `1 hora e ${remainingMinutes} min` 
-          : `${hours} horas e ${remainingMinutes} min`;
-      }
-    }
-  };
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box>
+      {/* Cabeçalho */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 'medium' }}>
           Serviços
@@ -196,7 +162,8 @@ export default function Services() {
           Novo Serviço
         </Button>
       </Box>
-      
+
+      {/* Filtros */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <TextField
           fullWidth
@@ -213,68 +180,37 @@ export default function Services() {
           }}
         />
       </Paper>
-      
+
+      {/* Tabela de serviços */}
       <TableContainer component={Paper}>
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Nome</TableCell>
-                <TableCell>Preço</TableCell>
-                <TableCell>Duração</TableCell>
-                <TableCell align="right">Ações</TableCell>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Nome</TableCell>
+              <TableCell>Duração</TableCell>
+              <TableCell align="right">Ações</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredServices.map((service) => (
+              <TableRow key={service.id}>
+                <TableCell>{service.name}</TableCell>
+                <TableCell>{service.duration} minutos</TableCell>
+                <TableCell align="right">
+                  <IconButton color="primary" onClick={() => handleOpenDialog(service)}>
+                    <EditIcon />
+                  </IconButton>
+                </TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredServices.length > 0 ? (
-                filteredServices.map((service) => (
-                  <TableRow key={service.id}>
-                    <TableCell>{service.name}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <MoneyIcon fontSize="small" sx={{ mr: 1, color: 'success.main' }} />
-                        {formatCurrency(service.price)}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <TimeIcon fontSize="small" sx={{ mr: 1, color: 'info.main' }} />
-                        {formatDuration(service.duration)}
-                      </Box>
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton 
-                        color="primary" 
-                        onClick={() => handleOpenDialog(service)}
-                        size="small"
-                      >
-                        <EditIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} align="center">
-                    {searchTerm ? 'Nenhum serviço encontrado' : 'Nenhum serviço cadastrado'}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        )}
+            ))}
+          </TableBody>
+        </Table>
       </TableContainer>
-      
-      {/* Dialog para criar/editar serviço */}
+
+      {/* Modal de serviço */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editingService ? 'Editar Serviço' : 'Novo Serviço'}
-        </DialogTitle>
-        <DialogContent>
+        <DialogTitle>{currentService ? 'Editar Serviço' : 'Novo Serviço'}</DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
           <TextField
             autoFocus
             margin="dense"
@@ -282,61 +218,46 @@ export default function Services() {
             type="text"
             fullWidth
             variant="outlined"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={serviceName}
+            onChange={(e) => setServiceName(e.target.value)}
             required
-            sx={{ mb: 2 }}
+            sx={{ mb: 2, borderRadius: 16 }}
           />
-          
-          <FormControl fullWidth variant="outlined" sx={{ mb: 2 }}>
-            <InputLabel htmlFor="price-input">Preço</InputLabel>
-            <OutlinedInput
-              id="price-input"
-              value={price}
-              onChange={(e) => {
-                // Permitir apenas números e ponto/vírgula
-                const value = e.target.value.replace(/[^0-9.,]/g, '');
-                // Substituir vírgula por ponto
-                setPrice(value.replace(',', '.'));
-              }}
-              startAdornment={<InputAdornment position="start">R$</InputAdornment>}
-              label="Preço"
-              placeholder="0.00"
-            />
-          </FormControl>
-          
           <TextField
             margin="dense"
             label="Duração (minutos)"
             type="number"
             fullWidth
             variant="outlined"
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
+            value={serviceDuration}
+            onChange={(e) => setServiceDuration(e.target.value)}
             InputProps={{
               endAdornment: <InputAdornment position="end">min</InputAdornment>,
             }}
-            inputProps={{ min: 1 }}
+            sx={{ borderRadius: 16 }}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancelar</Button>
-          <Button onClick={handleSaveService} variant="contained">
+        <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
+          <Button onClick={handleCloseDialog} sx={{ color: 'text.secondary' }}>
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleSaveService} 
+            variant="contained" 
+            sx={{ 
+              backgroundColor: 'primary.main', 
+              '&:hover': { backgroundColor: 'primary.dark' },
+              borderRadius: 16,
+            }}
+          >
             Salvar
           </Button>
         </DialogActions>
       </Dialog>
-      
-      {/* Snackbar para feedback */}
-      <Snackbar 
-        open={snackbar.open} 
-        autoHideDuration={6000} 
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
+
+      {/* Notificação de erro */}
+      <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')}>
+        <Alert onClose={() => setError('')} severity="error">{error}</Alert>
       </Snackbar>
     </Box>
   );
