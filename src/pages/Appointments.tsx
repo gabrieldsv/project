@@ -35,7 +35,7 @@ import {
 } from '@mui/icons-material';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { DateTimePicker, DateTimePickerProps } from '@mui/x-date-pickers/DateTimePicker'; // Importando o tipo correto
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker'; // Removendo o tipo DateTimePickerProps
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
@@ -482,7 +482,7 @@ export default function Appointments() {
             </Select>
           </FormControl>
           <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-            <DateTimePicker<Date>
+            <DateTimePicker
               label="Data e Hora"
               value={appointmentDate}
               onChange={(newValue) => setAppointmentDate(newValue)}
