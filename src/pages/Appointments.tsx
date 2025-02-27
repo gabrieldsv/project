@@ -35,11 +35,10 @@ import {
 } from '@mui/icons-material';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker'; // Removendo o tipo DateTimePickerProps
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import { TextFieldProps } from '@mui/material/TextField'; // Importando TextFieldProps
 
 // Interfaces para os dados
 interface Appointment {
@@ -485,20 +484,19 @@ export default function Appointments() {
             <DateTimePicker
               label="Data e Hora"
               value={appointmentDate}
-              onChange={(newValue) => setAppointmentDate(newValue)}
-              renderInput={(params: TextFieldProps) => (
-                <TextField 
-                  {...params} 
-                  fullWidth 
-                  sx={{ 
+              onChange={(newValue: Date | null) => setAppointmentDate(newValue)}
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                  sx: { 
                     mt: 2, 
                     borderRadius: 16, // Bordas mais arredondadas
                     '& .MuiOutlinedInput-root': {
                       borderRadius: 16,
                     },
-                  }} 
-                />
-              )}
+                  },
+                },
+              }}
             />
           </LocalizationProvider>
         </DialogContent>
